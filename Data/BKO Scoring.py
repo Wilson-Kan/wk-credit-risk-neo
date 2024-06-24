@@ -410,4 +410,34 @@ df_sp.write.mode('overwrite').option("overwriteSchema", "true").saveAsTable('neo
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC SELECT userId, month, brand, score FROM neo_views_credit_risk.beh_bko_score_test where month >= '2024-01'
+
+# COMMAND ----------
+
+def risk_flag(df):
+    
+    if (df['score'] <= 603):
+        return '1 - Highest risk'
+    elif (df['score'] <= 653) and (df['brand'] == 'NEO'):
+        return '2 - High risk'
+    elif (df['score'] <= 653):
+        return '3 - Medium high risk'
+    elif (df['score'] <= 697):
+        return '4 - Medium low risk'
+    elif (df['score'] <= 758):
+        return '5 - Low risk'
+    else:
+        return '6 - Lowest risk'
+      
+p_out = _sqldf.toPandas()
+p_out['risk_flag'] = p_out.apply(risk_flag, axis = 1)
+p_out.sort_values('risk_flag')
+
+#write to delta lake
+df_sp = spark.createDataFrame(p_out)
+df_sp.write.mode('overwrite').option("overwriteSchema", "true").saveAsTable('neo_views_credit_risk.bko_2024_01_06_segmented_v2')
+
+# COMMAND ----------
+
 
