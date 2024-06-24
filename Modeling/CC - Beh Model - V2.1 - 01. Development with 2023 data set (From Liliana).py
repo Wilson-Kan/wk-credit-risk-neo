@@ -498,8 +498,8 @@ from sklearn.model_selection import train_test_split
 
 df['referenceDate'] = pd.to_datetime(df['referenceDate'])
 
-X = df[df.referenceDate <= '2023-03-31']
-y = df[df.referenceDate <= '2023-03-31']
+X = df[df.referenceDate <= '2023-05-31']
+y = df[df.referenceDate <= '2023-05-31']
 y = y.bad
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, stratify=y, random_state=781263)
