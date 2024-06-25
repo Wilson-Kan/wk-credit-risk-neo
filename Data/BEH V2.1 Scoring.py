@@ -13,9 +13,9 @@ def risk_flag(df):
         return '5 - Low risk'
     elif (df['bad_rate'] <= 0.275):
         return '4 - Medium low risk'
-    elif (df['bad_rate'] <= 0.439):
-        return '3 - Medium high risk'
     elif (df['bad_rate'] <= 0.391):
+        return '3 - Medium high risk'
+    elif (df['bad_rate'] <= 0.439):
         return '2 - High risk'
     else:
         return '1 - Highest risk'
@@ -29,8 +29,8 @@ p_out.sort_values('risk_flag')
 
 #write to delta lake
 df_sp = spark.createDataFrame(p_out)
-df_sp.write.mode('overwrite').option("overwriteSchema", "true").saveAsTable('neo_views_credit_risk.beh_v21_2024_01_06_segmented')
+df_sp.write.mode('overwrite').option("overwriteSchema", "true").saveAsTable('neo_views_credit_risk.beh_v21_2024_01_06_segmented_v2')
 
 # COMMAND ----------
 
-
+p_out
