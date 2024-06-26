@@ -22,14 +22,4 @@ td.to_csv('/Workspace/Repos/wilson.kan@neofinancial.com/wk-credit-risk-neo/Model
 
 # COMMAND ----------
 
-import matplotlib.pyplot as plt
-from sklearn.tree import plot_tree
-import xgboost as xgb
-
-fig, ax = plt.subplots(figsize=(30, 30))
-xgb.plot_tree(beh_v21,ax=ax)
-plt.show()
-
-# COMMAND ----------
-
 
