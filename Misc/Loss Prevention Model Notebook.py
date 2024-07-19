@@ -2,6 +2,7 @@
 # MAGIC %sql
 # MAGIC select
 # MAGIC   beh.accountId,
+# MAGIC   ea.userId,
 # MAGIC   beh.referenceDate,
 # MAGIC   beh.daysPastDueBucket,
 # MAGIC   ea.originalCreditScore,
@@ -101,14 +102,46 @@ fsa_inc = _sqldf
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC select
+# MAGIC   accountID,
+# MAGIC   max(bunsen_score) as bunsen_score
+# MAGIC from
+# MAGIC   dbt_dev_alex_karklins.cdt_v2_base_co_v1
+# MAGIC where
+# MAGIC   bunsen_score is not null
+# MAGIC group by
+# MAGIC   accountID
 
+# COMMAND ----------
+
+bunsen = _sqldf
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT
+# MAGIC   userid,
+# MAGIC   probability_fraud
+# MAGIC FROM
+# MAGIC   neo_analytics_production.beaker_application_scores
+
+# COMMAND ----------
+
+beaker = _sqldf
 
 # COMMAND ----------
 
 beh_target = beh_score.join(
     target_table, beh_score.accountId == target_table.accountId_t, "left"
 )
-model_me = beh_target.join(fsa_inc, beh_target.currentFSA == fsa_inc.FSA, "left")
+beh_beaker = beh_target.join(
+    beaker, beh_score.userId == beaker.userid, "left"
+)
+beh_bunsen = beh_beaker.join(
+    bunsen, beh_beaker.accountId == bunsen.accountID, "left"
+)
+model_me = beh_bunsen.join(fsa_inc, beh_target.currentFSA == fsa_inc.FSA, "left")
 model_me = model_me.fillna(
     {
         "target_pd": "0",
@@ -117,8 +150,10 @@ model_me = model_me.fillna(
         "creditScoreDeterioration": "0",
     }
 )
-model_me = model_me.drop("accountId_t", "daysPastDueBucket")
-model_me = model_me.withColumn('inc_diff', model_me.personalIncome - model_me.avg_inc_fsa)
+model_me = model_me.drop("accountId_t", "daysPastDueBucket","accountID","userid")
+model_me = model_me.withColumn(
+    "inc_diff", model_me.personalIncome - model_me.avg_inc_fsa
+)
 
 # COMMAND ----------
 
@@ -142,11 +177,11 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 
 
-def train_tree(var, outstr, rand_s):
+def train_tree(mod_df, var, outstr, rand_s):
     clf = DecisionTreeClassifier(min_samples_leaf=0.0005, random_state=rand_s)
-    X = model_me_df[["bad_rate", *var]]
-    y_pd = model_me_df["target_pd"]
-    y_co = model_me_df["target_co"]
+    X = mod_df[["bad_rate", *var]]
+    y_pd = mod_df["target_pd"]
+    y_co = mod_df["target_co"]
     clf.fit(X, y_pd)
     res = clf.predict_proba(X)[:, 1]
     gini_pd = 2 * roc_auc_score(y_pd, res) - 1
@@ -160,7 +195,7 @@ def train_tree(var, outstr, rand_s):
     return [var, gini_pd, gini_co]
 
 
-def train_forest(var, outstr, rand_s):
+def train_forest(mod_df, var, outstr, rand_s):
     clf = RandomForestClassifier(
         n_estimators=25,
         min_samples_leaf=0.0005,
@@ -169,9 +204,9 @@ def train_forest(var, outstr, rand_s):
         random_state=rand_s,
         max_samples=0.8,
     )
-    X = model_me_df[["bad_rate", *var]]
-    y_pd = model_me_df["target_pd"]
-    y_co = model_me_df["target_co"]
+    X = mod_df[["bad_rate", *var]]
+    y_pd = mod_df["target_pd"]
+    y_co = mod_df["target_co"]
     clf.fit(X, y_pd)
     res = clf.predict_proba(X)[:, 1]
     gini_pd = 2 * roc_auc_score(y_pd, res) - 1
@@ -186,19 +221,19 @@ def train_forest(var, outstr, rand_s):
 
 # COMMAND ----------
 
-# train_tree(["creditScoreDeterioration"], "Unfloored score deterioration", 250822)
-# train_forest(["creditScoreDeterioration"], "Unfloored score deterioration", 250822)
+# train_tree(model_me_df, ["creditScoreDeterioration"], "Unfloored score deterioration", 250822)
+# train_forest(model_me_df, ["creditScoreDeterioration"], "Unfloored score deterioration", 250822)
 
 # COMMAND ----------
 
-# train_tree(["creditScoreDeterioration_floored"], "Floored score deterioration", 152535)
-# train_forest(["creditScoreDeterioration_floored"], "Floored score deterioration", 152535)
+# train_tree(model_me_df, ["creditScoreDeterioration_floored"], "Floored score deterioration", 152535)
+# train_forest(model_me_df, ["creditScoreDeterioration_floored"], "Floored score deterioration", 152535)
 
 # COMMAND ----------
 
 # model_me_df[['inc_diff']] = model_me_df[['inc_diff']].fillna(value=0)
-# train_tree(["inc_diff"], "Income Difference", 580188)
-# train_forest(["inc_diff"], "Income Difference", 580188)
+# train_tree(model_me_df, ["inc_diff"], "Income Difference", 580188)
+# train_forest(model_me_df, ["inc_diff"], "Income Difference", 580188)
 
 # COMMAND ----------
 
@@ -208,31 +243,27 @@ def train_forest(var, outstr, rand_s):
 # X_trans = pd.get_dummies(X)
 # col_name = X_trans.columns.to_list()
 # col_name.append("bad_rate")
-# model_me_df = pd.concat([model_me_df, X_trans], axis=1)
+# attribution_df = pd.concat([model_me_df, X_trans], axis=1)
 
 # COMMAND ----------
 
-# train_tree(col_name, "Customer attribution channel", 60676)
-# train_forest(col_name, "Customer attribution channel", 60676)
+# train_tree(attribution_df, col_name, "Customer attribution channel", 60676)
+# train_forest(attribution_df, col_name, "Customer attribution channel", 60676)
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC SELECT
-# MAGIC   userid,
-# MAGIC   applicationAtUTC,
-# MAGIC   probability_fraud
-# MAGIC FROM
-# MAGIC   beaker_application_scores
+# model_filtered = model_me_df.fillna(subset=["bunsen_score"])
+model_me_df[['bunsen_score']] = model_me_df[['bunsen_score']].fillna(value=-1)
+train_tree(model_me_df, ["bunsen_score"], "Bunsen", 174832)
+train_forest(model_me_df, ["bunsen_score"], "Bunsen", 174832)
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC select
-# MAGIC   distinct accountID,
-# MAGIC   userID,
-# MAGIC   max(bunsen_score)
-# MAGIC from
-# MAGIC   dbt_dev_alex_karklins.cdt_v2_base_co_v1
-# MAGIC where
-# MAGIC   bunsen_score is not null
+# model_filtered = model_me_df.dropna(subset=["probability_fraud"])
+model_me_df[['probability_fraud']] = model_me_df[['probability_fraud']].fillna(value=0)
+train_tree(model_me_df, ["probability_fraud"], "Beaker", 869407)
+train_forest(model_me_df, ["probability_fraud"], "Beaker", 869407)
+
+# COMMAND ----------
+
+
