@@ -192,8 +192,9 @@ abc.columns
 
 import pyspark.sql.functions as F
 from pyspark.sql import SparkSession
+
 tucrcs_ds = spark.sql(
-  """
+    """
     with
       -- PART 1. COLLECT SOFT CHECK REPORTS
       vars_old AS (
@@ -413,9 +414,8 @@ display(tucrcs_ds)
 
 # COMMAND ----------
 
-
 tu_hard_crcs_ds = spark.sql(
-  """
+    """
     with
       -- PART 1. COLLECT SOFT CHECK REPORTS
       vars_old AS (
@@ -636,24 +636,129 @@ tu_hard_crcs_ds = spark.sql(
 from pyspark.sql import SparkSession
 
 spark = SparkSession.builder.getOrCreate()
-test = spark.sql(
-    """
+spark.sql(
+    """create table neo_views_credit_risk.wk_appl_data_no_hardcheck
 select
-  *
+  ea.*,
+  ms._id as ms_id,
+ms._replicationVersion,
+ms.adjudicationResult,
+ms.applicationId,
+ms.applicationType,
+ms.berbixIdVerificationResult,
+ms.complyAdvantageSanctionsAndPepChecksResult,
+ms.email,
+ms.enstreamAccountIntegrityChecksResult,
+ms.enstreamIdentityVerificationChecksResult,
+ms.fraudVendorCheckResult,
+ms.fraudVendorMetadata,
+ms.hasACompletedAndApprovedApplication,
+ms.iovationDigitalFraudChecksResult,
+ms.kycCheckResult,
+ms.kycDocumentResult,
+ms.prequalificationSinMismatchCheckResult,
+ms.transunionEbvsIdChecksResult,
+ms.transunionHardCreditCheckResult,
+ms.transunionHrfaCheckResult,
+ms.transunionSoftCreditCheckResult,
+ms.userDetails,
+ms.idVerificationResult,
+sc._id as sc_id,
+sc.accountNetCharacteristics,
+usu._id as usu_id,
+usu.ambassadorCode,
+usu.annualIncomeHistory,
+usu.creditScore,
+usu.dateOfBirth,
+usu.deletedAt,
+usu.emails,
+usu.employmentInfo,
+usu.employmentInfoHistory,
+usu.encryptedAnnualIncome,
+usu.encryptedTaxInformation,
+usu.externalId,
+usu.failedLoginAttempts,
+usu.firstName,
+usu.frozenReason,
+usu.housingStatus,
+usu.housingStatusHistory,
+usu.inactiveReason,
+usu.investmentAccount,
+usu.language,
+usu.lastLoginAttempt,
+usu.lastLoginReferralLink,
+usu.lastName,
+usu.locale,
+usu.lockoutExpiresAt,
+usu.monthlyHousingCostCents,
+usu.monthlyHousingCostHistory,
+usu.password,
+usu.personalIdentifiableInformationHistory,
+usu.physicalAddress,
+usu.preferredName,
+usu.previousEmails,
+usu.previousPasswords,
+usu.previousPhone,
+usu.previousPhysicalAddresses,
+usu.products,
+usu.referralLink,
+usu.riskProfile,
+usu.roles,
+usu.softCreditCheckReportId,
+usu.timezone,
+usu.voucherCode,
+usu.mailingAddress,
+usu.partner,
+usu.sin,
+usu.middleName
 from 
   neo_raw_production.credit_onboarding_service_credit_applications as ea
   inner join neo_raw_production.identity_service_user_reports_metadata_snapshots as ms
-  inner join neo_raw_production.identity_service_transunion_soft_credit_check_reports as sc
-  inner join neo_raw_production.identity_service_transunion_hard_credit_check_reports as hc
+  inner join (select _id 
+          ,details.accountNetCharacteristics from neo_raw_production.identity_service_transunion_soft_credit_check_reports
+  union select _id 
+          ,details.accountNetCharacteristics from neo_raw_production.application_service_transunion_soft_credit_reports) as sc
+  inner join neo_raw_production.user_service_users as usu
   on ea.userReportsMetadataSnapshotId = ms._id
   and ms.transunionSoftCreditCheckResult.reportId = sc._id
-  and ms.transunionHardCreditCheckResult.reportId = hc._id
+  and ea.userId = usu._id
 """
 )
 
 # COMMAND ----------
 
-test.count()
+spark.sql(
+    """create table neo_views_credit_risk.wk_appl_data_w_hardcheck
+  select hc._id as hc_id, hc.trades from neo_views_credit_risk.wk_appl_data_no_hardcheck
+  inner join neo_raw_production.identity_service_transunion_hard_credit_check_reports as hc
+ on transunionHardCreditCheckResult.reportId = hc._id"""
+)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select
+# MAGIC   *
+# MAGIC from
+# MAGIC   neo_raw_production.user_service_users
+
+# COMMAND ----------
+
+_sqldf.columns
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select
+# MAGIC   *
+# MAGIC From
+# MAGIC   neo_raw_production.identity_service_transunion_hard_credit_check_reports
+# MAGIC limit
+# MAGIC   1
+
+# COMMAND ----------
+
+_sqldf.columns
 
 # COMMAND ----------
 
