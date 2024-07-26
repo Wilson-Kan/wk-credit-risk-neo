@@ -1196,6 +1196,62 @@ X = spark.sql(
 
 # COMMAND ----------
 
+spark = SparkSession.builder.getOrCreate()
+spark.conf.set("spark.sql.mapKeyDedupPolicy", "LAST_WIN")
+
+X = spark.sql(
+    """select
+  *
+from(
+    select
+      hc_id,
+      X.balance,
+      X.creditLimit,
+      X.dateLastActivity,
+      X.dateOpened,
+      X.dateRevised,
+      X.frequency,
+      X.highCredit,
+      X.joint,
+      X.maskedAccountNumber,
+      X.memberCode,
+      X.memberName,
+      X.monthsReviewed,
+      X.mop,
+      X.pastDue,
+      X.payment,
+      X.paymentPattern,
+      X.paymentPatternStartDate,
+      X.plus30,
+      X.plus60,
+      X.plus90,
+      X.type,
+      X.narrative,
+      ROW_NUMBER() OVER(
+        PARTITION BY hc_id
+        ORDER BY
+          X.dateRevised DESC
+      ) AS rank
+    from
+      (
+        select
+          hc_id,
+          explode(hc_details.trades) as X
+        from
+          neo_views_credit_risk.wk_appl_data_w_hardcheck
+      )
+    where
+      X.type = 'I'
+    order by
+      hc_id,
+      dateRevised desc
+  )
+where
+  rank = 1"""
+)
+
+# COMMAND ----------
+
 display(X)
 
 # COMMAND ----------
@@ -1204,9 +1260,24 @@ X.select('key').distinct().collect()
 
 # COMMAND ----------
 
-Y =     spark.sql("""
-        SELECT
-          hardcheckReportId
-          ,EXPLODE(params)
-        FROM vars_raw
-      )
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.getOrCreate()
+spark.conf.set("spark.sql.mapKeyDedupPolicy", "LAST_WIN")
+
+X = spark.sql(
+    """select * from (select hc_id, explode(params) from (SELECT 
+          hc_id
+          ,MAP_FROM_ENTRIES(COLLECT_LIST(STRUCT(hc_details.trades[0].id, hc_details.trades[0].value))) params
+        FROM neo_views_credit_risk.wk_appl_data_w_hardcheck LATERAL VIEW INLINE(hc_details.trades[0]) hc_details.trades[0]
+        GROUP BY hc_id))
+    -- PIVOT (
+    --       SUM(CAST(value AS INT)) AS crcValue FOR key IN (
+    --     )
+    -- )
+  """
+)
+
+# COMMAND ----------
+
+
