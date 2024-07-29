@@ -627,7 +627,7 @@ spark.sql(
     select * from
     (
       SELECT
-      accountId,
+      applicationId,
       referenceDate,
       brand,
       productTypeName,
@@ -647,12 +647,12 @@ spark.sql(
         or chargedOffReason not in ("N/A")
       )
     order by
-      accountId,
+      applicationId,
       referenceDate
     )
   where n = 1
 """
-# Create default data)
+)
 
 # COMMAND ----------
 
@@ -662,7 +662,7 @@ spark.sql(
   """
   create table neo_views_credit_risk.wk_lifetime_pl as
     SELECT
-      accountId,
+      applicationId,
       max(monthOnBook) as MOB,
       coalesce(max(cumulativeCreditAccountRevenue), 0) as rev,
       coalesce(max(cumulativeCreditAccountRevenue), 0) / max(monthOnBook) as rev_per_m,
@@ -673,7 +673,7 @@ spark.sql(
     FROM
       neo_trusted_analytics.earl_account
     group by
-      accountId
+      applicationId
   """
 )
 
@@ -683,7 +683,7 @@ spark.sql(
 
 spark.sql(
   """
-    CREATE TABLE neo_views_credit_risk.wk_feature_and_target_no_hc
+    CREATE or replace TABLE neo_views_credit_risk.wk_feature_and_target_no_hc
       SELECT
         b.*,
         dl.referenceDate as default_dt,
@@ -691,6 +691,9 @@ spark.sql(
         dl.productTypeName,
         dl.creditFacility,
         coalesce(dl.isdefault, 0) as isdefault,
+        DATEDIFF(day, CAST(b.completedAt as date), dl.referenceDate) as day_diff,
+        case when day_diff <= 365 then 1 else 0 end as isdefault_1y,
+        case when day_diff <= 182 then 1 else 0 end as isdefault_6m,
         pl.rev,
         pl.rev_per_m,
         pl.charge_off,
@@ -700,9 +703,9 @@ spark.sql(
       FROM
         neo_views_credit_risk.wk_appl_model_raw_features_no_hardcheck as b
         left join neo_views_credit_risk.wk_default_list as dl
-          on b.applicationMetadataId = dl.accountId
+          on b.applicationId = dl.applicationId
         left join neo_views_credit_risk.wk_lifetime_pl as pl
-          on b.applicationMetadataId = pl.accountId
+          on b.applicationId = pl.applicationId
   """
 )
 
@@ -712,7 +715,7 @@ spark.sql(
 
 spark.sql(
   """
-    CREATE TABLE neo_views_credit_risk.wk_feature_and_target_w_hc
+    CREATE or replace TABLE neo_views_credit_risk.wk_feature_and_target_w_hc
       SELECT
         b.*,
         dl.referenceDate as default_dt,
@@ -720,6 +723,9 @@ spark.sql(
         dl.productTypeName,
         dl.creditFacility,
         coalesce(dl.isdefault, 0) as isdefault,
+        DATEDIFF(day, CAST(b.completedAt as date), dl.referenceDate) as day_diff,
+        case when day_diff <= 365 then 1 else 0 end as isdefault_1y,
+        case when day_diff <= 182 then 1 else 0 end as isdefault_6m,
         pl.rev,
         pl.rev_per_m,
         pl.charge_off,
@@ -729,9 +735,9 @@ spark.sql(
       FROM
         neo_views_credit_risk.wk_appl_model_raw_features_w_hardcheck as b
         left join neo_views_credit_risk.wk_default_list as dl
-          on b.applicationMetadataId = dl.accountId
+          on b.applicationId = dl.applicationId
         left join neo_views_credit_risk.wk_lifetime_pl as pl
-          on b.applicationMetadataId = pl.accountId
+          on b.applicationId = pl.applicationId
   """
 )
 
