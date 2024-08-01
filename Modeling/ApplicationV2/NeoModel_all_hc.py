@@ -1,5 +1,5 @@
 # Databricks notebook source
-start_from_pickle = True
+start_from_pickle = False
 
 # COMMAND ----------
 
@@ -471,9 +471,29 @@ if not start_from_pickle:
             else 0
           end as thin,
           substring(userInformation.physicalAddress.postal, 1, 3) as FSA,
+          CAST(balance AS float) as balance,
+          CAST(creditLimit AS float) as creditLimit,
+          CAST(dateLastActivity AS float) as dateLastActivity,
+          CAST(dateOpened AS float) as dateOpened,
+          CAST(dateRevised AS float) as dateRevised,
+          --CAST(frequency AS float) as frequency,
+          CAST(highCredit AS float) as highCredit,
+          --CAST(joint AS float) as joint,
+          CAST(maskedAccountNumber AS float) as maskedAccountNumber,
+          CAST(memberCode AS float) as memberCode,
+          CAST(memberName AS float) as memberName,
+          CAST(monthsReviewed AS float) as monthsReviewed,
+          CAST(mop AS float) as mop,
+          CAST(pastDue AS float) as pastDue,
+          CAST(payment AS float) as payment,
+          --CAST(paymentPattern AS float) as paymentPattern,
+          --CAST(paymentPatternStartDate AS float) as paymentPatternStartDate,
+          CAST(plus30 AS float) as plus30,
+          CAST(plus60 AS float) as plus60,
+          CAST(plus90 AS float) as plus90,
           isdefault_1y
         from
-          neo_views_credit_risk.wk_feature_and_target_no_hc as a
+          neo_views_credit_risk.wk_feature_and_target_w_hc as a
           left join (
             select
               distinct userId,
@@ -533,13 +553,13 @@ import pickle
 
 if not start_from_pickle:
     with open(
-        "/Workspace/Repos/wilson.kan@neofinancial.com/wk-credit-risk-neo/Modeling/ApplicationV2/modeling_ready.pkl",
+        "/Workspace/Repos/wilson.kan@neofinancial.com/wk-credit-risk-neo/Modeling/ApplicationV2/modeling_ready_hc.pkl",
         "wb",
     ) as f:  # open a text file
         pickle.dump(modeling_dummy_df, f)
 else:
     with open(
-        "/Workspace/Repos/wilson.kan@neofinancial.com/wk-credit-risk-neo/Modeling/ApplicationV2/modeling_ready.pkl",
+        "/Workspace/Repos/wilson.kan@neofinancial.com/wk-credit-risk-neo/Modeling/ApplicationV2/modeling_ready_hc.pkl",
         "rb",
     ) as f:  # Correctly opening the file in binary read mode
         modeling_dummy_df = pickle.load(f)

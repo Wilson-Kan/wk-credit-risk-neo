@@ -55,8 +55,6 @@ spark.sql(
         hc_id,
         dateRevised desc
       )
-    where
-      rank = 1
   """
 )
 
