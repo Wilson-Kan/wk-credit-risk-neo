@@ -99,7 +99,7 @@ if not start_from_pickle:
           GO152,
           GO17,
           GO21,
-          GO26,
+          -- GO26,
           GO80,
           GO81,
           GO83,
@@ -365,7 +365,7 @@ if not start_from_pickle:
           -- IDXSF240,
           -- IDXSF241,
           -- IDXSF244,
-          IN04,
+          -- IN04,
           IN60,
           IN84,
           MC60,
@@ -514,18 +514,19 @@ if not start_from_pickle:
 
 import pandas as pd
 
-house_dummies = pd.get_dummies(
-    modeling_df["housingStatus"],
-    prefix="houseStat",
-    drop_first=True,
-    dummy_na=True,
-    dtype=int,
-)
-modeling_dummy_df = pd.concat([modeling_df, house_dummies], axis=1)
-modeling_dummy_df.drop(
-    ["brand", "userId", "FSA", "housingStatus"], axis=1, inplace=True
-)
-modeling_dummy_df.head()
+if not start_from_pickle:
+    house_dummies = pd.get_dummies(
+        modeling_df["housingStatus"],
+        prefix="houseStat",
+        drop_first=True,
+        dummy_na=True,
+        dtype=int,
+    )
+    modeling_dummy_df = pd.concat([modeling_df, house_dummies], axis=1)
+    modeling_dummy_df.drop(
+        ["brand", "userId", "FSA", "housingStatus"], axis=1, inplace=True
+    )
+    modeling_dummy_df.head()
 
 # COMMAND ----------
 
@@ -533,13 +534,13 @@ import pickle
 
 if not start_from_pickle:
     with open(
-        "/Workspace/Repos/wilson.kan@neofinancial.com/wk-credit-risk-neo/Modeling/ApplicationV2/modeling_ready.pkl",
+        "/Workspace/Users/wilson.kan@neofinancial.com/pkls/appl_neo_v2_modeling_ready.pkl",
         "wb",
     ) as f:  # open a text file
         pickle.dump(modeling_dummy_df, f)
 else:
     with open(
-        "/Workspace/Repos/wilson.kan@neofinancial.com/wk-credit-risk-neo/Modeling/ApplicationV2/modeling_ready.pkl",
+        "/Workspace/Users/wilson.kan@neofinancial.com/pkls/appl_neo_v2_modeling_ready.pkl",
         "rb",
     ) as f:  # Correctly opening the file in binary read mode
         modeling_dummy_df = pickle.load(f)
@@ -571,10 +572,10 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 # create model instance
 bst = XGBClassifier(
-    n_estimators=50, max_depth=6, colsample_bytree = 0.65, subsample = 0.5, objective="binary:logistic", random_state=601715
+    n_estimators=100, max_depth=6, colsample_bytree = 0.75, subsample = 0.5, gamma = 1, eta = 0.1, min_child_weight = 2, objective="binary:logistic", random_state=601715
 )
 # fit model
-bst.fit(X_train, y_train)
+bst.fit(X_train, y_train, verbose=True, early_stopping_rounds=10, eval_metric="auc", eval_set=[(X_test, y_test)])
 xgb.plot_importance(bst)
 # make predictions
 # preds = bst.predict(X_test)
@@ -596,10 +597,10 @@ for i in range(20):
   top_set.append(feature_imp[i][0])
 # create model instance
 bst = XGBClassifier(
-    n_estimators=50, max_depth=6, colsample_bytree = 0.65, subsample = 0.5, objective="binary:logistic", random_state=517218
+    n_estimators=100, max_depth=6, colsample_bytree = 0.75, subsample = 0.5, gamma = 1, eta = 0.1, min_child_weight = 2, random_state=517218
 )
 # fit model
-bst.fit(X_train[top_set], y_train)
+bst.fit(X_train[top_set], y_train, verbose=True, early_stopping_rounds=10, eval_metric="auc", eval_set=[(X_test[top_set], y_test)])
 xgb.plot_importance(bst)
 
 # COMMAND ----------
@@ -609,9 +610,9 @@ from sklearn.metrics import roc_auc_score
 x_train_scr = bst.predict_proba(X_train[top_set])
 x_test_scr = bst.predict_proba(X_test[top_set])
 x_oot_scr = bst.predict_proba(modeling_oot[top_set])
-print("train", roc_auc_score(y_train, x_train_scr[:, 1]))
-print("test", roc_auc_score(y_test, x_test_scr[:, 1]))
-print("oot", roc_auc_score(modeling_oot["isdefault_1y"], x_oot_scr[:, 1]))
+print("train", 2*roc_auc_score(y_train, x_train_scr[:, 1])-1)
+print("test", 2*roc_auc_score(y_test, x_test_scr[:, 1])-1)
+print("oot", 2*roc_auc_score(modeling_oot["isdefault_1y"], x_oot_scr[:, 1])-1)
 
 # COMMAND ----------
 
@@ -623,9 +624,9 @@ thick = modeling_dummy_df[
 x_subprime_scr = bst.predict_proba(sp[top_set])
 x_thin_scr = bst.predict_proba(thin[top_set])
 x_thick_scr = bst.predict_proba(thick[top_set])
-print("subprime", roc_auc_score(sp["isdefault_1y"], x_subprime_scr[:, 1]))
-print("thin", roc_auc_score(thin["isdefault_1y"], x_thin_scr[:, 1]))
-print("thick", roc_auc_score(thick["isdefault_1y"], x_thick_scr[:, 1]))
+print("subprime", 2*roc_auc_score(sp["isdefault_1y"], x_subprime_scr[:, 1])-1)
+print("thin", 2*roc_auc_score(thin["isdefault_1y"], x_thin_scr[:, 1])-1)
+print("thick", 2*roc_auc_score(thick["isdefault_1y"], x_thick_scr[:, 1])-1)
 
 # COMMAND ----------
 

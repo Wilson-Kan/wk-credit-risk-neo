@@ -1,5 +1,5 @@
 # Databricks notebook source
-start_from_pickle = False
+start_from_pickle = True
 
 # COMMAND ----------
 
@@ -99,7 +99,7 @@ if not start_from_pickle:
           GO152,
           GO17,
           GO21,
-          GO26,
+          --GO26,
           GO80,
           GO81,
           GO83,
@@ -365,7 +365,7 @@ if not start_from_pickle:
           -- IDXSF240,
           -- IDXSF241,
           -- IDXSF244,
-          IN04,
+          -- IN04,
           IN60,
           IN84,
           MC60,
@@ -471,26 +471,17 @@ if not start_from_pickle:
             else 0
           end as thin,
           substring(userInformation.physicalAddress.postal, 1, 3) as FSA,
-          CAST(balance AS float) as balance,
-          CAST(creditLimit AS float) as creditLimit,
-          CAST(dateLastActivity AS float) as dateLastActivity,
-          CAST(dateOpened AS float) as dateOpened,
-          CAST(dateRevised AS float) as dateRevised,
-          --CAST(frequency AS float) as frequency,
-          CAST(highCredit AS float) as highCredit,
-          --CAST(joint AS float) as joint,
-          CAST(maskedAccountNumber AS float) as maskedAccountNumber,
-          CAST(memberCode AS float) as memberCode,
-          CAST(memberName AS float) as memberName,
-          CAST(monthsReviewed AS float) as monthsReviewed,
-          CAST(mop AS float) as mop,
-          CAST(pastDue AS float) as pastDue,
-          CAST(payment AS float) as payment,
-          --CAST(paymentPattern AS float) as paymentPattern,
-          --CAST(paymentPatternStartDate AS float) as paymentPatternStartDate,
-          CAST(plus30 AS float) as plus30,
-          CAST(plus60 AS float) as plus60,
-          CAST(plus90 AS float) as plus90,
+          hc_balance,
+          hc_creditLimit,
+          hc_pastDue,
+          hc_payment,
+          hc_plus30,
+          hc_plus60,
+          hc_plus90,
+          rev_cnt,
+          ins_cnt,
+          mort_cnt,
+          trade_cnt,
           isdefault_1y
         from
           neo_views_credit_risk.wk_feature_and_target_w_hc as a
@@ -553,13 +544,13 @@ import pickle
 
 if not start_from_pickle:
     with open(
-        "/Workspace/Repos/wilson.kan@neofinancial.com/wk-credit-risk-neo/Modeling/ApplicationV2/modeling_ready_hc.pkl",
+        "/Workspace/Users/wilson.kan@neofinancial.com/pkls/appl_neo_v2_modeling_ready_hc.pkl",
         "wb",
     ) as f:  # open a text file
         pickle.dump(modeling_dummy_df, f)
 else:
     with open(
-        "/Workspace/Repos/wilson.kan@neofinancial.com/wk-credit-risk-neo/Modeling/ApplicationV2/modeling_ready_hc.pkl",
+        "/Workspace/Users/wilson.kan@neofinancial.com/pkls/appl_neo_v2_modeling_ready_hc.pkl",
         "rb",
     ) as f:  # Correctly opening the file in binary read mode
         modeling_dummy_df = pickle.load(f)
@@ -591,10 +582,10 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 # create model instance
 bst = XGBClassifier(
-    n_estimators=50, max_depth=6, colsample_bytree = 0.65, subsample = 0.5, objective="binary:logistic", random_state=601715
+    n_estimators=100, max_depth=6, colsample_bytree = 0.75, subsample = 0.5, gamma = 1, eta = 0.1, min_child_weight = 2, random_state=347631
 )
 # fit model
-bst.fit(X_train, y_train)
+bst.fit(X_train, y_train, verbose=True, early_stopping_rounds=10, eval_metric="auc", eval_set=[(X_test, y_test)])
 xgb.plot_importance(bst)
 # make predictions
 # preds = bst.predict(X_test)
@@ -616,10 +607,10 @@ for i in range(20):
   top_set.append(feature_imp[i][0])
 # create model instance
 bst = XGBClassifier(
-    n_estimators=50, max_depth=6, colsample_bytree = 0.65, subsample = 0.5, objective="binary:logistic", random_state=517218
+    n_estimators=100, max_depth=6, colsample_bytree = 0.75, subsample = 0.5, gamma = 1, eta = 0.1, min_child_weight = 2, random_state=875355
 )
 # fit model
-bst.fit(X_train[top_set], y_train)
+bst.fit(X_train[top_set], y_train, verbose=True, early_stopping_rounds=10, eval_metric="auc", eval_set=[(X_test[top_set], y_test)])
 xgb.plot_importance(bst)
 
 # COMMAND ----------
@@ -629,9 +620,9 @@ from sklearn.metrics import roc_auc_score
 x_train_scr = bst.predict_proba(X_train[top_set])
 x_test_scr = bst.predict_proba(X_test[top_set])
 x_oot_scr = bst.predict_proba(modeling_oot[top_set])
-print("train", roc_auc_score(y_train, x_train_scr[:, 1]))
-print("test", roc_auc_score(y_test, x_test_scr[:, 1]))
-print("oot", roc_auc_score(modeling_oot["isdefault_1y"], x_oot_scr[:, 1]))
+print("train", 2*roc_auc_score(y_train, x_train_scr[:, 1])-1)
+print("test", 2*roc_auc_score(y_test, x_test_scr[:, 1])-1)
+print("oot", 2*roc_auc_score(modeling_oot["isdefault_1y"], x_oot_scr[:, 1])-1)
 
 # COMMAND ----------
 
@@ -643,9 +634,13 @@ thick = modeling_dummy_df[
 x_subprime_scr = bst.predict_proba(sp[top_set])
 x_thin_scr = bst.predict_proba(thin[top_set])
 x_thick_scr = bst.predict_proba(thick[top_set])
-print("subprime", roc_auc_score(sp["isdefault_1y"], x_subprime_scr[:, 1]))
-print("thin", roc_auc_score(thin["isdefault_1y"], x_thin_scr[:, 1]))
-print("thick", roc_auc_score(thick["isdefault_1y"], x_thick_scr[:, 1]))
+print("subprime", 2*roc_auc_score(sp["isdefault_1y"], x_subprime_scr[:, 1])-1)
+# print("thin", 2*roc_auc_score(thin["isdefault_1y"], x_thin_scr[:, 1])-1)
+print("thick", 2*roc_auc_score(thick["isdefault_1y"], x_thick_scr[:, 1])-1)
+
+# COMMAND ----------
+
+thin["isdefault_1y"].unique()
 
 # COMMAND ----------
 
