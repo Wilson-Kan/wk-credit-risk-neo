@@ -10,51 +10,47 @@ spark.sql(
   """
     create table neo_views_credit_risk.wk_hardcheck_normalize
     select
-      *
-    from (
-      select
-        hc_id,
-        X.balance,
-        X.creditLimit,
-        X.dateLastActivity,
-        X.dateOpened,
-        X.dateRevised,
-        X.frequency,
-        X.highCredit,
-        X.joint,
-        X.maskedAccountNumber,
-        X.memberCode,
-        X.memberName,
-        X.monthsReviewed,
-        X.mop,
-        X.pastDue,
-        X.payment,
-        X.paymentPattern,
-        X.paymentPatternStartDate,
-        X.plus30,
-        X.plus60,
-        X.plus90,
-        X.type,
-        X.narrative,
-        ROW_NUMBER() OVER(
-          PARTITION BY hc_id
-          ORDER BY
-            X.dateRevised DESC
-        ) AS rank
+  *
+from
+  (
+    select
+      hc_id,
+      sum(X.balance) as hc_balance,
+      sum(X.creditLimit) as hc_creditLimit,
+      sum(X.pastDue) as hc_pastDue,
+      sum(X.payment) as hc_payment,
+      sum(X.plus30) as hc_plus30,
+      sum(X.plus60) as hc_plus60,
+      sum(X.plus90) as hc_plus90,
+      sum(
+        case
+          when X.type = 'R' then 1
+          else 0
+        end
+      ) as rev_cnt,
+      sum(
+        case
+          when X.type = 'I' then 1
+          else 0
+        end
+      ) as ins_cnt,
+      sum(
+        case
+          when X.type = 'M' then 1
+          else 0
+        end
+      ) as mort_cnt,
+      count(*) as trade_cnt
+    from
+      (
+        select
+          _id as hc_id,
+          explode(details.trades) as X
         from
-        (
-          select
-            _id as hc_id,
-            explode(details.trades) as X
-          from
-            neo_raw_production.identity_service_transunion_hard_credit_check_reports
-        )
-      where
-        X.type = 'I'
-      order by
-        hc_id,
-        dateRevised desc
+          neo_raw_production.identity_service_transunion_hard_credit_check_reports
       )
+      group by hc_id
+  )
   """
 )
 
@@ -586,29 +582,9 @@ spark.sql(
 #Join hardcheck
 spark.sql(
   """
-    create table neo_views_credit_risk.wk_appl_model_raw_features_w_hardcheck
+    create or replace table neo_views_credit_risk.wk_appl_model_raw_features_w_hardcheck
       select nhc.*
-      , hc.hc_id
-      , hc.balance
-      , hc.creditLimit
-      , hc.dateLastActivity
-      , hc.dateOpened
-      , hc.dateRevised
-      , hc.frequency
-      , hc.highCredit
-      , hc.joint
-      , hc.maskedAccountNumber
-      , hc.memberCode
-      , hc.memberName
-      , hc.monthsReviewed
-      , hc.mop
-      , hc.pastDue
-      , hc.payment
-      , hc.paymentPattern
-      , hc.paymentPatternStartDate
-      , hc.plus30
-      , hc.plus60
-      , hc.plus90
+      , hc.*
     from neo_views_credit_risk.wk_appl_model_raw_features_no_hardcheck as nhc
       inner join neo_views_credit_risk.wk_hardcheck_normalize as hc
       on transunionHardCreditCheckResult.reportId = hc.hc_id
@@ -681,7 +657,7 @@ spark.sql(
 
 spark.sql(
   """
-    CREATE or replace TABLE neo_views_credit_risk.wk_feature_and_target_no_hc
+    CREATE TABLE neo_views_credit_risk.wk_feature_and_target_no_hc
       SELECT
         b.*,
         dl.referenceDate as default_dt,
@@ -713,7 +689,7 @@ spark.sql(
 
 spark.sql(
   """
-    CREATE or replace TABLE neo_views_credit_risk.wk_feature_and_target_w_hc
+    CREATE TABLE neo_views_credit_risk.wk_feature_and_target_w_hc
       SELECT
         b.*,
         dl.referenceDate as default_dt,
