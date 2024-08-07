@@ -525,18 +525,19 @@ if not start_from_pickle:
 
 import pandas as pd
 
-house_dummies = pd.get_dummies(
-    modeling_df["housingStatus"],
-    prefix="houseStat",
-    drop_first=True,
-    dummy_na=True,
-    dtype=int,
-)
-modeling_dummy_df = pd.concat([modeling_df, house_dummies], axis=1)
-modeling_dummy_df.drop(
-    ["brand", "userId", "FSA", "housingStatus"], axis=1, inplace=True
-)
-modeling_dummy_df.head()
+if not start_from_pickle:
+    house_dummies = pd.get_dummies(
+        modeling_df["housingStatus"],
+        prefix="houseStat",
+        drop_first=True,
+        dummy_na=True,
+        dtype=int,
+    )
+    modeling_dummy_df = pd.concat([modeling_df, house_dummies], axis=1)
+    modeling_dummy_df.drop(
+        ["brand", "userId", "FSA", "housingStatus"], axis=1, inplace=True
+    )
+    modeling_dummy_df.head()
 
 # COMMAND ----------
 
@@ -567,6 +568,9 @@ modeling_oot = modeling_dummy_df[
 modeling_intime = modeling_dummy_df[
     modeling_dummy_df["month_end"] < np.datetime64("2023-06-30")
 ]
+modeling_intime = modeling_dummy_df[
+    modeling_dummy_df["month_end"] > np.datetime64("2022-12-31")
+]
 
 # COMMAND ----------
 
@@ -578,7 +582,7 @@ from sklearn.model_selection import train_test_split
 X_train, X_test, y_train, y_test = train_test_split(
     modeling_intime.drop(["month_end", "isdefault_1y", "originalCreditScore", "GO17"], axis=1),
     modeling_intime["isdefault_1y"],
-    test_size=0.2,
+    test_size=0.2, random_state=826121
 )
 # create model instance
 bst = XGBClassifier(
@@ -605,9 +609,10 @@ feature_imp
 top_set = []
 for i in range(20):
   top_set.append(feature_imp[i][0])
+print(top_set)
 # create model instance
 bst = XGBClassifier(
-    n_estimators=100, max_depth=6, colsample_bytree = 0.75, subsample = 0.5, gamma = 1, eta = 0.1, min_child_weight = 2, random_state=875355
+    n_estimators=100, max_depth=6, colsample_bytree = 0.75, subsample = 0.5, gamma = 1, eta = 0.1,  random_state=875355
 )
 # fit model
 bst.fit(X_train[top_set], y_train, verbose=True, early_stopping_rounds=10, eval_metric="auc", eval_set=[(X_test[top_set], y_test)])

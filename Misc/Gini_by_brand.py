@@ -85,3 +85,9 @@ res_df.to_csv(
 # COMMAND ----------
 
 
+
+# COMMAND ----------
+
+# MAGIC %environment
+# MAGIC "client": "1"
+# MAGIC "base_environment": ""

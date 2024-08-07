@@ -557,6 +557,9 @@ modeling_oot = modeling_dummy_df[
 modeling_intime = modeling_dummy_df[
     modeling_dummy_df["month_end"] < np.datetime64("2023-06-30")
 ]
+modeling_intime = modeling_dummy_df[
+    modeling_dummy_df["month_end"] > np.datetime64("2022-12-31")
+]
 
 # COMMAND ----------
 
@@ -568,7 +571,7 @@ from sklearn.model_selection import train_test_split
 X_train, X_test, y_train, y_test = train_test_split(
     modeling_intime.drop(["month_end", "isdefault_1y", "originalCreditScore", "GO17"], axis=1),
     modeling_intime["isdefault_1y"],
-    test_size=0.2,
+    test_size=0.2, random_state=835656
 )
 # create model instance
 bst = XGBClassifier(
@@ -595,6 +598,7 @@ feature_imp
 top_set = []
 for i in range(20):
   top_set.append(feature_imp[i][0])
+print(top_set)
 # create model instance
 bst = XGBClassifier(
     n_estimators=100, max_depth=6, colsample_bytree = 0.75, subsample = 0.5, gamma = 1, eta = 0.1, min_child_weight = 2, random_state=517218
