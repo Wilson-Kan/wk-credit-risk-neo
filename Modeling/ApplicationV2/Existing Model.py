@@ -27,7 +27,7 @@
 # MAGIC   neo_views_credit_risk.wk_feature_and_target_no_hc as a
 # MAGIC   INNER JOIN neo_views_credit_risk.cc_all_v1000_dbt_application_scores as b on a.applicationId = b.applicationId
 # MAGIC where
-# MAGIC   a.brand = 'NEO'
+# MAGIC   a.brand = 'SIENNA'
 # MAGIC   and a.decision = 'APPROVED'
 # MAGIC   and a.type = 'STANDARD'
 
@@ -47,6 +47,4 @@ print("sp", 2 * roc_auc_score(sp["isdefault_1y"], sp["spscr"]) - 1)
 
 # COMMAND ----------
 
-# MAGIC %environment
-# MAGIC "client": "1"
-# MAGIC "base_environment": ""
+
