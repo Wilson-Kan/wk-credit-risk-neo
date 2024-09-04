@@ -84,6 +84,7 @@ def scaling_score(raw_score, lower_bound = 300, upper_bound = 850, round_down = 
   max_score = max(raw_score)
   scale_0_1 = (raw_score - min_score) / (max_score - min_score)
   scale_to_tu_range = (scale_0_1 * (upper_bound - lower_bound)) + lower_bound
+  print(f"scale_0_1 = (X - {min_score} / ({max_score} - {min_score}) \n scale_to_tu_range = (scale_0_1 * (850 - 300)) + 300))")
   if round_down:
     return [math.floor(i) for i in scale_to_tu_range]
   return scale_to_tu_range
@@ -92,9 +93,9 @@ def score_upload(model, indat, upload_name):
   indat.loc[:,'raw_pred'] = bst.predict_proba(indat[bst.feature_names_in_])[:,1]
   indat.loc[:,'model_scr'] = scaling_score(indat['raw_pred'])
 
-  indat_sp = spark.createDataFrame(indat)
-  indat_sp.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(upload_name)
-  return indat[['model_scr', 'decision']].groupby(['decision']).mean()
+  # indat_sp = spark.createDataFrame(indat)
+  # indat_sp.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(upload_name)
+  # return indat[['model_scr', 'decision']].groupby(['decision']).mean()
 
 # COMMAND ----------
 
