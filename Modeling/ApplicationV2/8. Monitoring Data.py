@@ -8,7 +8,7 @@ import datetime
 import dateutil.relativedelta
 
 t_date = datetime.datetime.today()
-st_date_1 = t_date - dateutil.relativedelta.relativedelta(years=1, months=3)
+st_date_1 = t_date - dateutil.relativedelta.relativedelta(years=1, months=6)
 st_date_2 = t_date - dateutil.relativedelta.relativedelta(years=1)
 st_date_1 = st_date_1.replace(day=1)
 st_date_2 = st_date_2.replace(day=1)
@@ -191,10 +191,6 @@ import pickle
 
 # COMMAND ----------
 
-
-
-# COMMAND ----------
-
 # Normalize softcheck
 
 tu_sc = spark.sql(
@@ -254,7 +250,8 @@ tu_sc = spark.sql(
 df_w_sc = spark.sql(
     """
     select
-      ea.*,
+      ea.brandName as brand,
+      ea.applicationCompletedAt_mt as app_date,
       ms._id as ms_id,
       ms.applicationId,
       ms.transunionSoftCreditCheckResult,
@@ -270,11 +267,11 @@ df_w_sc = spark.sql(
       usu._id as usu_id,
       case when usu.housingStatus = 'RENT' then 1 else 0 end as houseStat_RENT
       from
-        neo_raw_production.credit_onboarding_service_credit_applications as ea
-        inner join neo_raw_production.identity_service_user_reports_metadata_snapshots as ms
-        on ea.userReportsMetadataSnapshotId = ms._id
+  neo_trusted_analytics.earl_application as ea
+  inner join neo_raw_production.identity_service_user_reports_metadata_snapshots as ms on ea.applicationId = ms.applicationId
         inner join neo_raw_production.user_service_users as usu
-        on ea.userId = usu._id
+        on ea.customerId = usu._id
+        where ea.cardType = 'STANDARD' and ea.applicationDecision = 'APPROVED'
   """
 )
 
@@ -285,28 +282,28 @@ def_list = spark.sql(
     select * from
     (
       SELECT
-      applicationId,
-      referenceDate,
-      productTypeName,
-      chargedOffReason,
-      monthOnBook,
-      creditFacility,
+      earl_acc.applicationId,
+      earl_acc.referenceDate,
+      earl_acc.productTypeName,
+      earl_acc.chargedOffReason,
+      earl_acc.monthOnBook,
+      earl_acc.creditFacility,
       1 as isdefault,
       row_number() OVER(
-        PARTITION BY accountId
+        PARTITION BY earl_acc.accountId
         ORDER BY
-          referenceDate
+          earl_acc.referenceDate
       ) AS n
       FROM
-        neo_trusted_analytics.earl_account
+        neo_trusted_analytics.earl_account as earl_acc
       where
       (
         daysPastDue >= 90
         or chargedOffReason not in ("N/A")
       )
     order by
-      applicationId,
-      referenceDate
+      earl_acc.applicationId,
+      earl_acc.referenceDate
     )
   where n = 1
 """
@@ -317,10 +314,9 @@ temp_a = df_w_sc.join(
 )
 res = temp_a.join(def_list, temp_a.applicationId == def_list.applicationId, "left")
 
-res = res.filter(res.createdAt.between(st_date_1, st_date_2))
+res = res.filter(res.app_date.between(st_date_1, st_date_2))
 res = res.fillna(0, subset=["isdefault"])
 res = res.select(
-    "createdAt",
     "brand",
     "creditScore",
     "subprime",
@@ -369,6 +365,180 @@ res = res.select(
 
 # COMMAND ----------
 
+# # Normalize softcheck
+
+# tu_sc = spark.sql(
+#     """select * from (select sc_id, explode(params) from (SELECT
+#           sc_id
+#           ,MAP_FROM_ENTRIES(COLLECT_LIST(STRUCT(accountNetCharacteristics.id, accountNetCharacteristics.value))) params
+#         FROM ((select _id as sc_id
+#           ,details.accountNetCharacteristics from neo_raw_production.identity_service_transunion_soft_credit_check_reports
+#           union select _id as sc_id
+#           ,details.accountNetCharacteristics from neo_raw_production.application_service_transunion_soft_credit_reports) as sc) LATERAL VIEW INLINE(accountNetCharacteristics) accountNetCharacteristics
+#         GROUP BY sc_id))
+#     PIVOT (
+#           SUM(CAST(value AS INT)) AS crcValue FOR key IN (
+#       'AT01',
+#       'GO14',
+#       'GO15',
+#       'GO151',
+#       'GO141',
+#       'BC147',
+#       'BC94',
+#       'BC142',
+#       'AM07',
+#       'AM04',
+#       'BR04',
+#       'BC04',
+#       'AM167',
+#       'BR60',
+#       'AT60',
+#       'RE28',
+#       'BC60',
+#       'GO148',
+#       'BC62',
+#       'AM60',
+#       'AM41',
+#       'RE61',
+#       'AM33',
+#       'BC148',
+#       'RE07',
+#       'GO21',
+#       'RE01',
+#       'GO06',
+#       'AT02',
+#       'BC02',
+#       'AM91',
+#       'RE29',
+#       'BC145',
+#       'RE03',
+#       'RE06',
+#       'AM29',
+#       'RE336',
+#       'AM02'
+#       )
+#     )
+#   """
+# )
+
+# df_w_sc = spark.sql(
+#     """
+#     select
+#       ea.*,
+#       ms._id as ms_id,
+#       ms.applicationId,
+#       ms.transunionSoftCreditCheckResult,
+#           cast(
+#             ms.transunionSoftCreditCheckResult.creditScore as int
+#           ) as creditScore,
+#           case
+#             when cast(
+#             ms.transunionSoftCreditCheckResult.creditScore as int
+#           ) < 640 then 1
+#             else 0
+#           end as subprime,
+#       usu._id as usu_id,
+#       case when usu.housingStatus = 'RENT' then 1 else 0 end as houseStat_RENT
+#       from
+#         neo_raw_production.credit_onboarding_service_credit_applications as ea
+#         inner join neo_raw_production.identity_service_user_reports_metadata_snapshots as ms
+#         on ea.userReportsMetadataSnapshotId = ms._id
+#         inner join neo_raw_production.user_service_users as usu
+#         on ea.userId = usu._id
+#   """
+# )
+
+# # Create default data
+
+# def_list = spark.sql(
+#     """
+#     select * from
+#     (
+#       SELECT
+#       applicationId,
+#       referenceDate,
+#       productTypeName,
+#       chargedOffReason,
+#       monthOnBook,
+#       creditFacility,
+#       1 as isdefault,
+#       row_number() OVER(
+#         PARTITION BY accountId
+#         ORDER BY
+#           referenceDate
+#       ) AS n
+#       FROM
+#         neo_trusted_analytics.earl_account
+#       where
+#       (
+#         daysPastDue >= 90
+#         or chargedOffReason not in ("N/A")
+#       )
+#     order by
+#       applicationId,
+#       referenceDate
+#     )
+#   where n = 1
+# """
+# )
+
+# temp_a = df_w_sc.join(
+#     tu_sc, df_w_sc.transunionSoftCreditCheckResult.reportId == tu_sc.sc_id, "left"
+# )
+# res = temp_a.join(def_list, temp_a.applicationId == def_list.applicationId, "left")
+
+# res = res.filter(res.createdAt.between(st_date_1, st_date_2))
+# res = res.fillna(0, subset=["isdefault"])
+# res = res.select(
+#     "createdAt",
+#     "brand",
+#     "creditScore",
+#     "subprime",
+#     "houseStat_RENT",
+#     "isdefault",
+#     "ms.applicationId",
+#     "AT01",
+#     "GO14",
+#     "GO15",
+#     "GO151",
+#     "GO141",
+#     "BC147",
+#     "BC94",
+#     "BC142",
+#     "AM07",
+#     "AM04",
+#     "BR04",
+#     "BC04",
+#     "AM167",
+#     "BR60",
+#     "AT60",
+#     "RE28",
+#     "BC60",
+#     "GO148",
+#     "BC62",
+#     "AM60",
+#     "AM41",
+#     "RE61",
+#     "AM33",
+#     "BC148",
+#     "RE07",
+#     "GO21",
+#     "RE01",
+#     "GO06",
+#     "AT02",
+#     "BC02",
+#     "AM91",
+#     "RE29",
+#     "BC145",
+#     "RE03",
+#     "RE06",
+#     "AM29",
+#     "RE336",
+#     "AM02",
+# )
+
+# COMMAND ----------
+
 score_me = res.toPandas()
 
 # COMMAND ----------
@@ -409,9 +579,14 @@ for i in range(len(model_list)):
         test_dat.loc[:, bst.feature_names_in_]
     )[:, 1]
     auc = 1
-    def_c = test_dat["def"].sum()
+    def_c = test_dat["isdefault"].sum()
+    # def_c = test_dat["def"].sum()
     if def_c > 0:
-        auc = 2 * roc_auc_score(test_dat.loc[:, "def"], test_dat.loc[:, "raw_pred"]) - 1
+        # auc = 2 * roc_auc_score(test_dat.loc[:, "def"], test_dat.loc[:, "raw_pred"]) - 1
+        auc = (
+            2 * roc_auc_score(test_dat.loc[:, "isdefault"], test_dat.loc[:, "raw_pred"])
+            - 1
+        )
     res["model_id"].append(model_id_list[i])
     res["date"].append(f"{st_date_1.date()} - {st_date_2.date()}")
     res["auc"].append(auc)

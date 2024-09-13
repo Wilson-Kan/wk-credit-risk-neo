@@ -62,7 +62,9 @@ score_me = spark.sql(
           else 0
         end as thin,
         case
-          when (creditScore < 640) then 1
+          when (cast(
+          transunionSoftCreditCheckResult.creditScore as int
+        )  < 640) then 1
           else 0
         end as subprime,
         {s[:-1]}
@@ -93,9 +95,9 @@ def score_upload(model, indat, upload_name):
   indat.loc[:,'raw_pred'] = bst.predict_proba(indat[bst.feature_names_in_])[:,1]
   indat.loc[:,'model_scr'] = scaling_score(indat['raw_pred'])
 
-  # indat_sp = spark.createDataFrame(indat)
-  # indat_sp.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(upload_name)
-  # return indat[['model_scr', 'decision']].groupby(['decision']).mean()
+  indat_sp = spark.createDataFrame(indat)
+  indat_sp.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(upload_name)
+  return indat[['model_scr', 'decision']].groupby(['decision']).mean()
 
 # COMMAND ----------
 
