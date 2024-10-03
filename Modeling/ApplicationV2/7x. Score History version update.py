@@ -35,7 +35,7 @@ complete_feature_set = set()
 for mod_name in model_list:
   bst.load_model(model_save_path + mod_name)
   complete_feature_set.update(bst.feature_names_in_)
-complete_feature_set = complete_feature_set.difference(['creditScore', 'houseStat_RENT'])
+complete_feature_set = complete_feature_set.difference(['creditScore'])
 s = ""
 for i in complete_feature_set:
   s += i + ","
@@ -54,10 +54,6 @@ score_me = spark.sql(
         cast(
           transunionSoftCreditCheckResult.creditScore as int
         ) as creditScore,
-        case
-          when housingStatus = 'RENT' then 1
-          else 0
-        end as houseStat_RENT,
         case
           when (
             AT01 <= 0
@@ -132,11 +128,3 @@ score_upload(bst, tims_thick_df, "hive_metastore.neo_views_credit_risk.wk_tims_t
 bst.load_model(model_save_path + model_list[4])
 tims_thin_df = score_me_df[(score_me_df["thin"] == 1) & (score_me_df["brand"] == 'SIENNA')]
 score_upload(bst, tims_thin_df, "hive_metastore.neo_views_credit_risk.wk_tims_thin_app_v2")
-
-# COMMAND ----------
-
-tims_thin_df
-
-# COMMAND ----------
-
-
