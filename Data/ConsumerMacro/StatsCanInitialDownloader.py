@@ -18,10 +18,10 @@ df = sc.vectors_to_df(
         "v41690914",
         "v41690915",
         "v62305845",
-        "v79311153",
-        "v122530",
-        "v122620",
-        "v111955442",
+        # "v79311153",
+        # "v122530",
+        # "v122620",
+        # "v111955442",
     ]
 )
 
@@ -30,10 +30,10 @@ data_names = [
     "CPI_all",
     "CPI_food",
     "GDP_can",
-    "WeeklyEarning_can",
-    "bankrate",
-    "TSX_close",
-    "HPI",
+    # "WeeklyEarning_can",
+    # "bankrate",
+    # "TSX_close",
+    # "HPI",
 ]
 
 # COMMAND ----------
