@@ -280,15 +280,15 @@ rf.fit(X_train, y_train)
 y_pred = rf.predict(X_test)
 
 # Calculate the mean squared error
-roc = roc_auc_score(y_test, y_pred)
-print(f"Gini: {2 * roc - 1}")
+# roc = roc_auc_score(y_test, y_pred)
+# print(f"Gini: {2 * roc - 1}")
 
 # Feature importance
 feature_importances = pd.DataFrame(rf.feature_importances_,
                                    index = X_train.columns,
                                    columns=['importance']).sort_values('importance', ascending=False)
 
-display(feature_importances)
+feature_importances
 
 # COMMAND ----------
 
@@ -303,7 +303,12 @@ perm_importance_df = pd.DataFrame({'feature': X_test.columns, 'importance_mean':
 # Sort by importance
 perm_importance_df = perm_importance_df.sort_values(by='importance_mean', ascending=False)
 
-display(perm_importance_df)
+perm_importance_df
+
+# COMMAND ----------
+
+feature_importances.to_csv("/Workspace/Users/wilson.kan@neofinancial.com/ValuationV1/feature_importances.csv")
+perm_importance_df.to_csv("/Workspace/Users/wilson.kan@neofinancial.com/ValuationV1/perm_importance_df.csv")
 
 # COMMAND ----------
 
