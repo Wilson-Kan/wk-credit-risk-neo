@@ -3,6 +3,10 @@ from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+from datetime import date
+
+pd.DataFrame.iteritems = pd.DataFrame.items
 
 spark = SparkSession.builder.getOrCreate()
 
@@ -198,139 +202,242 @@ model_non_hbc_temp_df = non_hbc_df.toPandas()
 
 # COMMAND ----------
 
-model_non_hbc_temp_df["future_mob"] = (
-    model_non_hbc_temp_df["t"] + model_non_hbc_temp_df["monthOnBook"]
-)
-model_non_hbc_temp_df["future_mth"] = pd.to_datetime(
-    model_non_hbc_temp_df["future_date"]
-).dt.month
+def non_hbc_data_tranform(df):
+    df["future_mob"] = df["t"] + df["monthOnBook"]
+    df["future_mth"] = pd.to_datetime(df["future_date"]).dt.month
 
-model_non_hbc_temp_df["transform_t"] = 1 / model_non_hbc_temp_df["t"]
-model_non_hbc_temp_df["transform_future_mob"] = 1 / model_non_hbc_temp_df["future_mob"]
+    df["transform_t"] = 1 / df["t"]
+    df["transform_future_mob"] = 1 / df["future_mob"]
 
-model_non_hbc_temp_df = pd.get_dummies(
-    model_non_hbc_temp_df, columns=["future_mth"], drop_first=True, dtype=int
-)
-model_non_hbc_temp_df.drop(
-    columns=["future_date", "referenceDate", "monthOnBook"], inplace=True
-)
-model_non_hbc_temp_df.fillna(0, inplace=True)
+    df = pd.get_dummies(df, columns=["future_mth"], drop_first=True, dtype=int)
+    df.drop(columns=["future_date", "referenceDate", "monthOnBook"], inplace=True)
+    df.fillna(0, inplace=True)
 
-# Convert columns with decimal.Decimal to float
-columns_to_convert = [
-    "tu_credit_score_CVSC100", "tu_tot_open_bc_BC94", "tu_mth_on_file_GO14",
-    "tu_ratio_tot_bal_hccl_bc_BC34", "customerLoginsLast30D", "avg_utilization"
-]
-for column in columns_to_convert:
-    model_non_hbc_temp_df[column] = model_non_hbc_temp_df[column].astype(float)
+    df["tu_tot_open_bc_BC94"] = np.log(np.maximum(df["tu_tot_open_bc_BC94"], 1))
 
-# Now perform your operations as before
+    # Convert columns with decimal.Decimal to float
+    columns_to_convert = [
+        "tu_credit_score_CVSC100",
+        "tu_tot_open_bc_BC94",
+        "tu_mth_on_file_GO14",
+        "tu_ratio_tot_bal_hccl_bc_BC34",
+        "customerLoginsLast30D",
+        "avg_utilization",
+    ]
+    for column in columns_to_convert:
+        df[column] = df[column].astype(float)
 
-model_non_hbc_temp_df["t_dep_tu_credit_score_CVSC100"] = (
-    model_non_hbc_temp_df["tu_credit_score_CVSC100"] * model_non_hbc_temp_df["transform_t"]
-)
-model_non_hbc_temp_df["t_dep_tu_tot_open_bc_BC94"] = (
-    model_non_hbc_temp_df["tu_tot_open_bc_BC94"] * model_non_hbc_temp_df["transform_t"]
-)
-model_non_hbc_temp_df["t_dep_tu_mth_on_file_GO14"] = (
-    model_non_hbc_temp_df["tu_mth_on_file_GO14"] * model_non_hbc_temp_df["transform_t"]
-)
-model_non_hbc_temp_df["t_dep_tu_ratio_tot_bal_hccl_bc_BC34"] = (
-    model_non_hbc_temp_df["tu_ratio_tot_bal_hccl_bc_BC34"]
-    * model_non_hbc_temp_df["transform_t"]
-)
-model_non_hbc_temp_df["t_dep_customerLoginsLast30D"] = (
-    model_non_hbc_temp_df["customerLoginsLast30D"] * model_non_hbc_temp_df["transform_t"]
-)
-model_non_hbc_temp_df["t_dep_avg_utilization"] = (
-    model_non_hbc_temp_df["avg_utilization"] * model_non_hbc_temp_df["transform_t"]
-)
+    # Now perform your operations as before
+    transform_col = [
+        "tu_credit_score_CVSC100",
+        "tu_tot_open_bc_BC94",
+        "tu_mth_on_file_GO14",
+        "tu_ratio_tot_bal_hccl_bc_BC34",
+        "customerLoginsLast30D",
+        "tu_credit_score_CVSC100",
+        "avg_utilization",
+    ]
 
-model_non_hbc_temp_df["mob_dep_tu_credit_score_CVSC100"] = (
-    model_non_hbc_temp_df["tu_credit_score_CVSC100"]
-    * model_non_hbc_temp_df["transform_future_mob"]
-)
-model_non_hbc_temp_df["mob_dep_tu_tot_open_bc_BC94"] = (
-    model_non_hbc_temp_df["tu_tot_open_bc_BC94"]
-    * model_non_hbc_temp_df["transform_future_mob"]
-)
-model_non_hbc_temp_df["mob_dep_tu_mth_on_file_GO14"] = (
-    model_non_hbc_temp_df["tu_mth_on_file_GO14"]
-    * model_non_hbc_temp_df["transform_future_mob"]
-)
-model_non_hbc_temp_df["mob_dep_tu_ratio_tot_bal_hccl_bc_BC34"] = (
-    model_non_hbc_temp_df["tu_ratio_tot_bal_hccl_bc_BC34"]
-    * model_non_hbc_temp_df["transform_future_mob"]
-)
-model_non_hbc_temp_df["mob_dep_customerLoginsLast30D"] = (
-    model_non_hbc_temp_df["customerLoginsLast30D"]
-    * model_non_hbc_temp_df["transform_future_mob"]
-)
+    for f in transform_col:
+        df[f"t_dep_{f}"] = df[f] * df["transform_t"]
+        df[f"mob_dep_{f}"] = df[f] * df["transform_future_mob"]
 
-model_non_hbc_temp_df.drop(
-    columns=[
-        "transform_t",
-        "transform_future_mob",
-        "t"
-    ],
-    inplace=True,
-)
+    df.drop(
+        columns=["transform_t", "transform_future_mob", "t", "future_mob"],
+        inplace=True,
+    )
+
+    return df
+
+
+model_non_hbc_temp_df = non_hbc_data_tranform(model_non_hbc_temp_df)
 
 # COMMAND ----------
 
-from sklearn.preprocessing import StandardScaler 
-    
-# define standard scaler 
-scaler = StandardScaler() 
-  
-# transform data 
-non_standardized_col = ["future_mob",
-"future_mth_2",
-"future_mth_3",
-"future_mth_4",
-"future_mth_5",
-"future_mth_6",
-"future_mth_7",
-"future_mth_8",
-"future_mth_9",
-"future_mth_10",
-"future_mth_11",
-"future_mth_12"]
+from sklearn.preprocessing import StandardScaler
+
+# define standard scaler
+scaler = StandardScaler()
+
+# transform data
+non_standardized_col = [
+    "future_mth_2",
+    "future_mth_3",
+    "future_mth_4",
+    "future_mth_5",
+    "future_mth_6",
+    "future_mth_7",
+    "future_mth_8",
+    "future_mth_9",
+    "future_mth_10",
+    "future_mth_11",
+    "future_mth_12",
+]
 
 # Transform data
-scaled_data = scaler.fit_transform(model_non_hbc_temp_df.drop(columns=["target_util"] + non_standardized_col))
+standardize_data = model_non_hbc_temp_df.drop(
+    columns=["target_util"] + non_standardized_col
+)
+scaled_data = scaler.fit_transform(standardize_data)
+
+for i in range(len(standardize_data.columns)):
+    print(
+        f"feature: {standardize_data.columns[i]} mean: {scaler.mean_[i]}  std: {scaler.scale_[i]}"
+    )
 
 # Convert the numpy array back to a DataFrame
-scaled_df = pd.DataFrame(scaled_data, columns=model_non_hbc_temp_df.drop(columns=["target_util"] + non_standardized_col).columns)
+scaled_df = pd.DataFrame(
+    scaled_data,
+    columns=model_non_hbc_temp_df.drop(
+        columns=["target_util"] + non_standardized_col
+    ).columns,
+)
 
 # Concatenate the non-standardized columns back to the scaled DataFrame
-model_non_hbc_df = pd.concat([scaled_df, model_non_hbc_temp_df[["target_util"] + non_standardized_col].reset_index(drop=True)], axis=1)
+model_non_hbc_df = pd.concat(
+    [
+        scaled_df,
+        model_non_hbc_temp_df[["target_util"] + non_standardized_col].reset_index(
+            drop=True
+        ),
+    ],
+    axis=1,
+)
 
 model_non_hbc_df.head()
 
 # COMMAND ----------
 
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import ElasticNet
+from sklearn.metrics import mean_squared_error, r2_score
 
 # Assuming 'target_util' is the target variable and exists in 'model_non_hbc_df'
 X = model_non_hbc_df.drop(columns=["target_util"])
 y = model_non_hbc_df["target_util"]
 
-reg = LinearRegression().fit(X, y)
+en = ElasticNet(alpha=0.0001, random_state=102478).fit(X, y)
 
-# Calculate the mean squared error
-# mse = mean_squared_error(y_test, y_pred)
-# print(f"Mean Squared Error: {mse}")
+# Make predictions on the testing data
+y_pred = en.predict(X)
 
-reg.coef_
+# Compute the R-squared on the testing data
+r2 = r2_score(y, y_pred)
+print("R-squared on testing data:", r2)
 
-# Feature importance
-# feature_importances = pd.DataFrame(
-#     rf.feature_importances_, index=X_train.columns, columns=["importance"]
-# ).sort_values("importance", ascending=False)
+# Compute the RMSE on the testing data
+mse = mean_squared_error(y, y_pred)
+rmse = np.sqrt(mse)
+print("RMSE on testing data:", rmse)
 
-# feature_importances
+print(f"intercept: {en.intercept_}\n")
+for i in range(len(X.columns)):
+    print(f"Feature: {X.columns[i]}, Coefficient: {en.coef_[i]}")
 
 # COMMAND ----------
 
+def pull(mth):
 
+  score_pretransform_df = spark.sql(
+    f"""
+      SELECT
+        a.accountId,
+        a.referenceDate,
+        monthOnBook,
+        avg_utilization,
+        tu_credit_score_CVSC100,
+        tu_tot_open_bc_BC94,
+        tu_mth_on_file_GO14,
+        tu_ratio_tot_bal_hccl_bc_BC34,
+        customerLoginsLast30D,
+        dateDiff(MONTH, a.referenceDate, b.referenceDate) as t,
+        b.referenceDate as future_date,
+        target_util
+      FROM
+        neo_views_credit_risk.wk_utilization_v1_data as a
+        inner join (
+          select
+            accountId,
+            referenceDate,
+            avg_utilization as target_util
+          FROM
+            neo_views_credit_risk.wk_utilization_v1_data
+        ) as b on a.accountId = b.accountId
+        and a.referenceDate < b.referenceDate
+      where
+        brand != "HBC"
+        and month(a.referenceDate) = {mth}
+    """
+  )
+
+  print(f"temp data: {score_pretransform_df.count()}")
+
+  pretransform_df = score_pretransform_df.toPandas()
+
+  return pretransform_df
+
+# COMMAND ----------
+
+def plot_pred(pretransform_df):
+    standardize_me = non_hbc_data_tranform(pretransform_df)
+
+    # Transform data
+    standardize_data = standardize_me.drop(columns=["target_util", "accountId"] + non_standardized_col)
+    standardize_data = standardize_data[np.isfinite(standardize_data).all(1)]
+
+    scaled_data = scaler.transform(standardize_data)
+    # Convert the numpy array back to a DataFrame
+    scaled_df = pd.DataFrame(
+        scaled_data,
+        columns=standardize_me.drop(columns=["target_util","accountId"] + non_standardized_col).columns,
+    )
+
+    # Concatenate the non-standardized columns back to the scaled DataFrame
+    ready_df = pd.concat(
+        [
+            scaled_df,
+            standardize_me[["target_util", "accountId"] + non_standardized_col].reset_index(drop=True),
+        ],
+        axis=1,
+    )
+
+    X = ready_df.drop(columns=["target_util", "accountId"])
+    X.fillna(0, inplace=True)
+    
+    # Make predictions on the testing data
+    ready_df["prediction"] = en.predict(X)
+
+    analysis_df = pd.concat([ready_df, pretransform_df.drop(columns=[c for c in ready_df.columns if c in pretransform_df.columns])], axis=1)
+
+    # Now your original code should work without modification
+    for dt in analysis_df['referenceDate'].unique():
+        filtered_df = analysis_df[analysis_df['referenceDate'] == dt]
+
+        summary_df = filtered_df[['monthOnBook', 'target_util', 'prediction']].groupby('monthOnBook').mean().reset_index()
+
+        # Plotting
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(summary_df['monthOnBook'].to_numpy(), summary_df['target_util'].to_numpy(), label='Target Utilization')
+        ax.plot(summary_df['monthOnBook'].to_numpy(), summary_df['prediction'].to_numpy(), label='Prediction', linestyle='--')
+
+        ax.set_xlabel('Month On Book')
+        ax.set_ylabel('Average Value')
+        ax.set_title(f'Average Target Utilization and Prediction by Month On Book for {dt.strftime("%Y-%m-%d")}')
+        ax.legend()
+
+        display(fig)
+
+# COMMAND ----------
+
+plot_pred(pull(3))
+
+# COMMAND ----------
+
+plot_pred(pull(6))
+
+# COMMAND ----------
+
+plot_pred(pull(9))
+
+# COMMAND ----------
+
+plot_pred(pull(12))
