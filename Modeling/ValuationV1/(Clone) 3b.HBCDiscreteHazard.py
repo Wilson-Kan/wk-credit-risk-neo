@@ -139,16 +139,66 @@ pyspark_df = spark.sql(
         mth_tot_prepaidRefundVolume,
         mth_tot_prepaidRefundCount,
         mth_tot_prepaidInternationalPurchaseCount,
-        mth_tot_fXFeeRevenue)
+        mth_tot_fXFeeRevenue,
+        cvs_date,
+        openedAt_mt,
+        channel,
+        source,
+        productName,
+        productTypeName,
+        cardType,
+        originalCreditScoreBand,
+        currentCreditScoreBand,
+        productCount,
+        activeProductCounts,
+        creditFacility,
+        rn,
+        avg_bal,
+        max_bal,
+        max_utilization,
+        mthend_utilization,
+        mthend_bal,
+        creditLimitIncreaseOffer,
+        creditLimitIncreaseRequested,
+        creditLimitIncreaseDeclined,
+        creditLimitIncreaseType,
+        incrementalCreditLimitOfferAmount,
+        changeCreditLimit,
+        cumulativeCLIOffersExtended,
+        creditLimit,
+        availableCreditLimit,
+        purchaseAPR,
+        latestStatementPaymentDueDate,
+        latestStatementMinimumPaymentAmountDollars,
+        latestStatementNewBalanceAmountDollars,
+        customerWebLoginsLast30D,
+        customerOtherLoginsLast30D,
+        hasBalanceProtection,
+        mth_tot_cashAdvanceVolume,
+        mth_tot_grossPurchaseVolume,
+        mth_tot_netPurchaseVolume,
+        mth_tot_grossRefundVolume,
+        mth_tot_netInternationalPurchaseVolume,
+        mth_tot_rewardCashOutVolume,
+        mth_tot_interchangeRevenue,
+        mth_tot_grossInterestRevenue,
+        mth_tot_numberOfInternalPaymentTransactions,
+        mth_tot_internationalCardPurchaseCount,
+        mth_tot_rewardDollarsEarned,
+        mth_tot_feeRevenue,
+        mth_tot_cashAdvanceCount,
+        tu_num_90d_6m_bc_BC77,
+        cumulativeCLDOffersApplied,
+        creditLimitIncreaseAccepted	)
     FROM
       neo_views_credit_risk.wk_utilization_v1_data
-      where brand != "HBC"
+      where brand = "HBC"
   """
 )
 
 distinct_aid = pyspark_df.select("accountId").distinct()
 
-train, test = distinct_aid.randomSplit(weights=[0.6, 0.4], seed=726178)
+train, test = distinct_aid.randomSplit(weights=[0.4, 0.6], seed=451995)
 
 full_train_df = pyspark_df.join(train.select("accountId"), ["accountId"], "inner")
 
@@ -156,7 +206,7 @@ full_test_df = pyspark_df.join(test.select("accountId"), ["accountId"], "inner")
 
 
 full_train_df_t_trans = full_train_df.withColumn(
-    "t", F.floor(F.lit(24) * F.rand(42180)) + 1
+    "t", F.floor(F.lit(24) * F.rand(703157)) + 1
 )
 
 full_train_df_t_trans = full_train_df_t_trans.withColumn(
@@ -184,25 +234,27 @@ print(f"mod data: {model_df.count()}")
 
 # COMMAND ----------
 
-non_hbc_df = model_df.select(
+hbc_df = model_df.select(
     "avg_utilization",
-    "tu_credit_score_CVSC100",
+    "tu_ratio_tot_bal_hccl_bc_BC34",
+    "cumulativeCreditAccountRevenue",
+    "mth_tot_purchaseAndCashAdvanceCount",
+    "tu_mth_on_file_GO14",
     "t",
     "monthOnBook",
     "tu_tot_open_bc_BC94",
-    "tu_mth_on_file_GO14",
-    "tu_ratio_tot_bal_hccl_bc_BC34",
+    "tu_credit_score_CVSC100",
     "customerLoginsLast30D",
     "referenceDate",
     "future_date",
     "target_util",
 )
 
-model_non_hbc_temp_df = non_hbc_df.toPandas()
+model_hbc_temp_df = hbc_df.toPandas()
 
 # COMMAND ----------
 
-def non_hbc_data_tranform(df):
+def hbc_data_tranform(df):
     df["future_mob"] = df["t"] + df["monthOnBook"]
     df["future_mth"] = pd.to_datetime(df["future_date"]).dt.month
 
@@ -214,15 +266,18 @@ def non_hbc_data_tranform(df):
     df.fillna(0, inplace=True)
 
     df["tu_tot_open_bc_BC94"] = np.log(np.maximum(df["tu_tot_open_bc_BC94"], 1))
+    df["cumulativeCreditAccountRevenue"] = np.log(
+        np.maximum(df["cumulativeCreditAccountRevenue"], 1)
+    )
 
     # Convert columns with decimal.Decimal to float
     columns_to_convert = [
-        "tu_credit_score_CVSC100",
-        "tu_tot_open_bc_BC94",
-        "tu_mth_on_file_GO14",
-        "tu_ratio_tot_bal_hccl_bc_BC34",
-        "customerLoginsLast30D",
         "avg_utilization",
+        "tu_ratio_tot_bal_hccl_bc_BC34",
+        "mth_tot_purchaseAndCashAdvanceCount",
+        "tu_tot_open_bc_BC94",
+        "tu_credit_score_CVSC100",
+        "customerLoginsLast30D",
     ]
     for column in columns_to_convert:
         df[column] = df[column].astype(float)
@@ -250,7 +305,7 @@ def non_hbc_data_tranform(df):
     return df
 
 
-model_non_hbc_temp_df = non_hbc_data_tranform(model_non_hbc_temp_df)
+model_hbc_temp_df = hbc_data_tranform(model_hbc_temp_df)
 
 # COMMAND ----------
 
@@ -275,7 +330,7 @@ non_standardized_col = [
 ]
 
 # Transform data
-standardize_data = model_non_hbc_temp_df.drop(
+standardize_data = model_hbc_temp_df.drop(
     columns=["target_util"] + non_standardized_col
 )
 scaled_data = scaler.fit_transform(standardize_data)
@@ -288,23 +343,23 @@ for i in range(len(standardize_data.columns)):
 # Convert the numpy array back to a DataFrame
 scaled_df = pd.DataFrame(
     scaled_data,
-    columns=model_non_hbc_temp_df.drop(
+    columns=model_hbc_temp_df.drop(
         columns=["target_util"] + non_standardized_col
     ).columns,
 )
 
 # Concatenate the non-standardized columns back to the scaled DataFrame
-model_non_hbc_df = pd.concat(
+model_hbc_df = pd.concat(
     [
         scaled_df,
-        model_non_hbc_temp_df[["target_util"] + non_standardized_col].reset_index(
+        model_hbc_temp_df[["target_util"] + non_standardized_col].reset_index(
             drop=True
         ),
     ],
     axis=1,
 )
 
-model_non_hbc_df.head()
+model_hbc_df.head()
 
 # COMMAND ----------
 
@@ -312,10 +367,10 @@ from sklearn.linear_model import ElasticNet
 from sklearn.metrics import mean_squared_error, r2_score
 
 # Assuming 'target_util' is the target variable and exists in 'model_non_hbc_df'
-X = model_non_hbc_df.drop(columns=["target_util"])
-y = model_non_hbc_df["target_util"]
+X = model_hbc_df.drop(columns=["target_util"])
+y = model_hbc_df["target_util"]
 
-en = ElasticNet(alpha=0.0001, random_state=102478).fit(X, y)
+en = ElasticNet(alpha=0.0001, random_state=275192).fit(X, y)
 
 # Make predictions on the testing data
 y_pred = en.predict(X)
@@ -335,14 +390,7 @@ for i in range(len(X.columns)):
 
 # COMMAND ----------
 
-import pickle
-# now you can save it to a file
-with open('/Workspace/Users/wilson.kan@neofinancial.com/ValuationV1/pkls/non_hbc_scalar_reg.pkl', 'wb') as f:
-    pickle.dump([scaler, en], f)
-
-# COMMAND ----------
-
-def pull(mth):
+def pull(yr, mth):
 
   score_pretransform_df = spark.sql(
     f"""
@@ -356,6 +404,8 @@ def pull(mth):
         tu_mth_on_file_GO14,
         tu_ratio_tot_bal_hccl_bc_BC34,
         customerLoginsLast30D,
+        cumulativeCreditAccountRevenue,
+        mth_tot_purchaseAndCashAdvanceCount,
         dateDiff(MONTH, a.referenceDate, b.referenceDate) as t,
         b.referenceDate as future_date,
         target_util
@@ -371,8 +421,10 @@ def pull(mth):
         ) as b on a.accountId = b.accountId
         and a.referenceDate < b.referenceDate
       where
-        brand != "HBC"
+        brand = "HBC"
         and month(a.referenceDate) = {mth}
+        and year(a.referenceDate) = {yr}
+        and a.monthOnBook = 0
     """
   )
 
@@ -385,11 +437,13 @@ def pull(mth):
 # COMMAND ----------
 
 def plot_pred(pretransform_df):
-    standardize_me = non_hbc_data_tranform(pretransform_df)
+    standardize_me = hbc_data_tranform(pretransform_df)
 
     # Transform data
     standardize_data = standardize_me.drop(columns=["target_util", "accountId"] + non_standardized_col)
     standardize_data = standardize_data[np.isfinite(standardize_data).all(1)]
+
+    standardize_data = standardize_data[scaler.feature_names_in_]
 
     scaled_data = scaler.transform(standardize_data)
     # Convert the numpy array back to a DataFrame
@@ -409,7 +463,9 @@ def plot_pred(pretransform_df):
 
     X = ready_df.drop(columns=["target_util", "accountId"])
     X.fillna(0, inplace=True)
-    
+
+    X = X[en.feature_names_in_]
+
     # Make predictions on the testing data
     ready_df["prediction"] = en.predict(X)
 
@@ -419,12 +475,12 @@ def plot_pred(pretransform_df):
     for dt in analysis_df['referenceDate'].unique():
         filtered_df = analysis_df[analysis_df['referenceDate'] == dt]
 
-        summary_df = filtered_df[['monthOnBook', 'target_util', 'prediction']].groupby('monthOnBook').mean().reset_index()
+        summary_df = filtered_df[['future_mob', 'target_util', 'prediction']].groupby('future_mob').mean().reset_index()
 
         # Plotting
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(summary_df['monthOnBook'].to_numpy(), summary_df['target_util'].to_numpy(), label='Target Utilization')
-        ax.plot(summary_df['monthOnBook'].to_numpy(), summary_df['prediction'].to_numpy(), label='Prediction', linestyle='--')
+        ax.plot(summary_df['future_mob'].to_numpy(), summary_df['target_util'].to_numpy(), label='Target Utilization')
+        ax.plot(summary_df['future_mob'].to_numpy(), summary_df['prediction'].to_numpy(), label='Prediction', linestyle='--')
 
         ax.set_xlabel('Month On Book')
         ax.set_ylabel('Average Value')
@@ -432,19 +488,156 @@ def plot_pred(pretransform_df):
         ax.legend()
 
         display(fig)
+    return analysis_df
 
 # COMMAND ----------
 
-plot_pred(pull(3))
+res = plot_pred(pull(2023, 3))
 
 # COMMAND ----------
 
-plot_pred(pull(6))
+res['referenceDate'].unique()
 
 # COMMAND ----------
 
-plot_pred(pull(9))
+import pickle
+# now you can save it to a file
+with open('/Workspace/Users/wilson.kan@neofinancial.com/ValuationV1/pkls/hbc_scalar_reg.pkl', 'wb') as f:
+    pickle.dump([scaler, en], f)
+
+# and later you can load it
+# with open('filename.pkl', 'rb') as f:
+#     clf = pickle.load(f)
 
 # COMMAND ----------
 
-plot_pred(pull(12))
+# def pull(mth):
+
+#     score_pretransform_df = spark.sql(
+#         f"""
+#       SELECT
+#         accountId,
+#         referenceDate,
+#         monthOnBook,
+#         avg_utilization,
+#         tu_credit_score_CVSC100,
+#         tu_tot_open_bc_BC94,
+#         tu_mth_on_file_GO14,
+#         tu_ratio_tot_bal_hccl_bc_BC34,
+#         customerLoginsLast30D,
+#         cumulativeCreditAccountRevenue,
+#         mth_tot_purchaseAndCashAdvanceCount
+#         --dateDiff(MONTH, a.referenceDate, b.referenceDate) as t,
+#         --b.referenceDate as future_date,
+#         --target_util
+#       FROM
+#         neo_views_credit_risk.wk_utilization_v1_data
+#         --inner join (
+#         --  select
+#         --    accountId,
+#         --    referenceDate,
+#         --    avg_utilization as target_util
+#         --  FROM
+#         --    neo_views_credit_risk.wk_utilization_v1_data
+#         --) as b on a.accountId = b.accountId
+#         --and a.referenceDate < b.referenceDate
+#       where
+#         brand = "HBC"
+#         and month(referenceDate) = {mth}
+#     """
+#     )
+
+#     print(f"temp data: {score_pretransform_df.count()}")
+
+#     pretransform_df = score_pretransform_df.toPandas()
+
+#     return pretransform_df
+
+
+# def plot_pred(pretransform_df):
+#     standardize_me = hbc_data_tranform(pretransform_df)
+
+#     missing_col = [c for c in non_standardized_col if c not in standardize_me.columns]
+
+#     for i in missing_col:
+#         standardize_me[i] = 0
+
+#     # Transform data
+#     standardize_data = standardize_me.drop(columns=["accountId"] + non_standardized_col)
+#     standardize_data = standardize_data[np.isfinite(standardize_data).all(1)]
+
+#     standardize_data = standardize_data[scaler.feature_names_in_]
+
+#     scaled_data = scaler.transform(standardize_data)
+#     # Convert the numpy array back to a DataFrame
+#     scaled_df = pd.DataFrame(
+#         scaled_data,
+#         columns=standardize_me.drop(
+#             columns=["accountId"] + non_standardized_col
+#         ).columns,
+#     )
+
+#     # Concatenate the non-standardized columns back to the scaled DataFrame
+#     ready_df = pd.concat(
+#         [
+#             scaled_df,
+#             standardize_me[["accountId"] + non_standardized_col].reset_index(drop=True),
+#         ],
+#         axis=1,
+#     )
+
+#     X = ready_df.drop(columns=["accountId"])
+#     X.fillna(0, inplace=True)
+
+#     X = X[en.feature_names_in_]
+
+#     # Make predictions on the testing data
+#     ready_df["prediction"] = en.predict(X)
+
+#     # out_df = ready_df.groupby("future_date").mean().reset_index()
+
+#     return ready_df
+
+#     # analysis_df = pd.concat([ready_df, pretransform_df.drop(columns=[c for c in ready_df.columns if c in pretransform_df.columns])], axis=1)
+
+#     # # Now your original code should work without modification
+#     # for dt in analysis_df['referenceDate'].unique():
+#     #     filtered_df = analysis_df[analysis_df['referenceDate'] == dt]
+
+#     #     summary_df = filtered_df[['monthOnBook', 'target_util', 'prediction']].groupby('monthOnBook').mean().reset_index()
+
+#     #     # Plotting
+#     #     fig, ax = plt.subplots(figsize=(10, 6))
+#     #     ax.plot(summary_df['monthOnBook'].to_numpy(), summary_df['target_util'].to_numpy(), label='Target Utilization')
+#     #     ax.plot(summary_df['monthOnBook'].to_numpy(), summary_df['prediction'].to_numpy(), label='Prediction', linestyle='--')
+
+#     #     ax.set_xlabel('Month On Book')
+#     #     ax.set_ylabel('Average Value')
+#     #     ax.set_title(f'Average Target Utilization and Prediction by Month On Book for {dt.strftime("%Y-%m-%d")}')
+#     #     ax.legend()
+
+#     #     display(fig)
+
+# COMMAND ----------
+
+# from dateutil.relativedelta import relativedelta
+
+# df = pull(3)
+# cross = pd.DataFrame()
+# cross["t"] = range(1, 2)
+
+# df_t = df.join(cross, how="cross")
+
+# df_t["future_date"] = df_t.apply(
+#     lambda v: relativedelta(months=int(v["t"])) + v["referenceDate"], axis=1
+# )
+
+# out = plot_pred(df_t)
+
+# COMMAND ----------
+
+en.feature_names_in_
+
+# COMMAND ----------
+
+
