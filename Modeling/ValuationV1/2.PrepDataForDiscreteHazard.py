@@ -174,7 +174,7 @@ print(f"mod data: {model_df.count()}")
 
 # COMMAND ----------
 
-display(model_df.groupBy("brand").count())
+display(model_df.groupBy("t").count().orderBy("t"))
 
 # COMMAND ----------
 
