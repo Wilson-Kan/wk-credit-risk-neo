@@ -3,4 +3,13 @@
 
 # COMMAND ----------
 
+from BaseModel import *
+
+# COMMAND ----------
+
+from BaseModel import BaseModel
+bko = BaseModel()
+
+# COMMAND ----------
+
 

@@ -10,7 +10,7 @@ window_end = datetime.today().strftime("%Y-%m-%d")
 
 pop_df = spark.sql(
     f"""
-    select a.applicationId, a.score, a.probability, b.applicationDecision
+    select a.applicationId, a.score, a.probability, b.applicationDecision, b.brandNAme as brand
     from neo_data_science_production.credit_risk_application_pd_thin_scores as a
     inner join neo_trusted_analytics.earl_application as b
     on a.applicationId = b.applicationId
@@ -61,3 +61,11 @@ def plot_roc(df, y_pred, y_target, title):
 # COMMAND ----------
 
 plot_roc(score_this, 'probability', 'is_def', 'ROC curve - App Thin')
+
+# COMMAND ----------
+
+plot_roc(score_this[score_this['brand'] == 'NEO'], 'probability', 'is_def', 'ROC curve - App Thick (NEO)')
+
+# COMMAND ----------
+
+plot_roc(score_this[score_this['brand'] == 'SIENNA'], 'probability', 'is_def', 'ROC curve - App Thick (Tims)')
