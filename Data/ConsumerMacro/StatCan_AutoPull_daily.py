@@ -1,13 +1,20 @@
 # Databricks notebook source
 import requests, pandas as pd
+pd.DataFrame.iteritems = pd.DataFrame.items
 
 # COMMAND ----------
+
+def getCubeName(pid):
+  url = "https://www150.statcan.gc.ca/t1/wds/rest/getCubeMetadata"
+  json = [{"productId": pid}]
+  req = requests.post(url, json=json).json()
+  return req[0]["object"]["cubeTitleEn"]
 
 def create_data_info(vectors):
   url = "https://www150.statcan.gc.ca/t1/wds/rest/getSeriesInfoFromVector"
   json = [{"vectorId": v} for v in vectors]
   req = requests.post(url, json=json).json()
-  data_info = [{"vectorId": r["object"]["vectorId"], "name": r["object"]["SeriesTitleEn"], "productId": r["object"]["productId"],  "coordinate": r["object"]["coordinate"], "terminated": r["object"]["terminated"]} for r in req]
+  data_info = [{"vectorId": r["object"]["vectorId"], "SeriesName": getCubeName(r["object"]["productId"]), "SubSeriesName": r["object"]["SeriesTitleEn"], "productId": r["object"]["productId"],  "coordinate": r["object"]["coordinate"], "terminated": r["object"]["terminated"]} for r in req]
   return pd.DataFrame(data_info)
   
 def range_create(s, cor_len = 10):
@@ -44,10 +51,10 @@ data_df = pd.DataFrame()
 info_df = pd.DataFrame()
 url = "https://www150.statcan.gc.ca/t1/wds/rest/getDataFromCubePidCoordAndLatestNPeriods"
 url_info = "https://www150.statcan.gc.ca/t1/wds/rest/getSeriesInfoFromVector"
-json_full = getSCJson("/Workspace/Users/wilson.kan@neofinancial.com/StatsCan/statcan_json_info.csv", 3)
-json_full = json_full[0:1000]
+json_full = getSCJson("/Workspace/Users/wilson.kan@neofinancial.com/StatsCan/statcan_json_daily_info.csv", 120000)
 
 while len(json_full) > 0:
+  print(f"data left: {len(json_full)}")
   pull_len = min(300, len(json_full))
   json = json_full[0:300]
   json_full = json_full[300:]
@@ -57,44 +64,24 @@ while len(json_full) > 0:
   info_df = pd.concat([info_df, info_temp], ignore_index=True)
   for single_data in dat_list:
     name = single_data["vectorId"]
-    data_series = (
-              pd.DataFrame(single_data["vectorDataPoint"])
-              .assign(refPer=lambda x: pd.to_datetime(x["refPer"]))
-              .set_index("refPer")
-              .rename(columns={"value": name})
-              .filter([name])
-          )
-    data_df = pd.concat([data_df, data_series], axis=1, sort=True)
+    try:
+      data_series = (
+                pd.DataFrame(single_data["vectorDataPoint"])
+                .assign(refPer=lambda x: pd.to_datetime(x["refPer"]))
+                .set_index("refPer")
+                .rename(columns={"value": name})
+                .filter([name])
+            )
+      data_df = pd.concat([data_df, data_series], axis=1, sort=True)
+    except:
+      print(f"err: {single_data['vectorId']}, {single_data['productId']}, {single_data['coordinate']}")
 
 
 # COMMAND ----------
 
-pd.set_option('display.max_colwidth', None)
-info_df
-
-# COMMAND ----------
+sp = spark.createDataFrame(info_df)
+sp.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable("hive_metastore.neo_views_credit_risk.wk_economic_ind_daily_info")
 
 data_df.reset_index(inplace=True, drop=False)
-data_df
-
-# COMMAND ----------
-
-url = "https://www150.statcan.gc.ca/t1/wds/rest/getDataFromCubePidCoordAndLatestNPeriods"
-json = [{"productId": 10100006, "coordinate": '1.1.1.0.0.0.0.0.0.0', "latestN": 25}]
-req = requests.post(url, json=json).json()
-
-# COMMAND ----------
-
-req
-
-# COMMAND ----------
-
-url = "https://www150.statcan.gc.ca/t1/wds/rest/getDataFromVectorsAndLatestNPeriods"
-json = [{"vectorId": 122667724, "latestN": 25}]
-req = requests.post(url, json=json).json()
-
-req
-
-# COMMAND ----------
-
-
+sp = spark.createDataFrame(data_df)
+sp.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable("hive_metastore.neo_views_credit_risk.wk_economic_ind_daily_data")
