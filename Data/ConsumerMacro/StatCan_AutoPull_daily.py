@@ -14,7 +14,7 @@ def create_data_info(vectors):
   url = "https://www150.statcan.gc.ca/t1/wds/rest/getSeriesInfoFromVector"
   json = [{"vectorId": v} for v in vectors]
   req = requests.post(url, json=json).json()
-  data_info = [{"vectorId": r["object"]["vectorId"], "SeriesName": getCubeName(r["object"]["productId"]), "SubSeriesName": r["object"]["SeriesTitleEn"], "productId": r["object"]["productId"],  "coordinate": r["object"]["coordinate"], "terminated": r["object"]["terminated"]} for r in req]
+  data_info = [{"vectorId": f"v{str(r['object']['vectorId'])}", "SeriesName": getCubeName(r['object']['productId']), "SubSeriesName": r['object']['SeriesTitleEn'], "productId": r['object']['productId'],  "coordinate": r['object']['coordinate'], "terminated": r['object']['terminated']} for r in req]
   return pd.DataFrame(data_info)
   
 def range_create(s, cor_len = 10):
@@ -82,6 +82,7 @@ while len(json_full) > 0:
 sp = spark.createDataFrame(info_df)
 sp.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable("hive_metastore.neo_views_credit_risk.wk_economic_ind_daily_info")
 
+data_df.columns = [f"v{c}" for c in data_df.columns]
 data_df.reset_index(inplace=True, drop=False)
 sp = spark.createDataFrame(data_df)
 sp.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable("hive_metastore.neo_views_credit_risk.wk_economic_ind_daily_data")
