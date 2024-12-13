@@ -1,4 +1,6 @@
 # Databricks notebook source
+# HBC in store fraud
+
 from datetime import datetime
 from pyspark.sql.functions import col, when
 
